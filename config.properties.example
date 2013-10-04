@@ -1,0 +1,17 @@
+# Rename config.properties.example to config.properties and fill in
+# the appropriate properties for the application that you wish to use.
+# For example, fill in the google configs if you are using applications
+# requiring Google search.
+
+# Google Configs
+google.apiKey=<YOUR_API_KEY_HERE>
+google.cseID=<YOUR_SEARCH_ENGINE_ID_HERE>
+
+# Twitter Configs
+twitter.oauth.consumerKey=*********************
+twitter.oauth.consumerSecret=******************************************
+twitter.oauth.accessToken=**************************************************
+twitter.oauth.accessTokenSecret=******************************************
+
+# Faroo Configs
+faroo.apiKey=<YOUR_API_KEY_HERE>

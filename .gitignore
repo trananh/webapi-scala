@@ -1,0 +1,14 @@
+.DS_Store
+*.class
+*.log
+.idea
+.idea/*
+*.iml
+*.properties
+
+# sbt specific
+dist/*
+target/
+
+# Scala-IDE specific
+.scala_dependencies
