@@ -4,7 +4,7 @@ webapi-scala
 
 This maven package provides Scala implementations for the following web search APIs:
 
-* Google search [API](https://developers.google.com/custom-search/)
+* Google Custom Search [API](https://developers.google.com/custom-search/)
 * Faroo search [API](http://www.faroo.com/hp/api/api.html)
 * Twitter search/stream.
 
