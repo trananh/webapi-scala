@@ -19,9 +19,26 @@ $ mvn compile
 ```
 
 
-## Demos
+## Running
 
-Once the project has compiled, you can run the following demos:
+You will need the appropriate API Authentication Keys for the search API that you wish
+to access.  You can request the keys from the respective search engines.
+
+Once you have the keys, you will need to add them to a configuration file.  Use the
+included example file (config.properties.example) as a sample.  Rename the example
+file to config.properties and fill in the appropriate keys.
+
+```bash
+$ cd /path/to/project/webapi-scala
+$ cp config.properties.example config.properties
+$ vim config.properties
+
+# Fill in the appropriate API keys and save
+
+```
+
+Once the project has compiled and the configuration file is set, you can try running
+the following demos:
 
 ```
 src/main/scala/search.web.RunGoogleSearcher
