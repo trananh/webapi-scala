@@ -55,18 +55,18 @@ class FarooSearcher(
   /** Perform a Faroo web search.
     *
     * @param query The query.
-    * @param numHits Maximum number of search results to request. This value is
-    *                capped by Faroo (0 < numHits <= 10).
+    * @param numPageHits Maximum number of search hits per search (page). This value is
+    *                    capped by Faroo's allowance (currently limited at 10).
     * @param startPoint Start position of results to request (default to 1).
     *
-    * @return List of Faroo search results.
+    * @return Faroo search response.
     */
   def search(query: String,
-             numHits: Integer = FarooSearcher.DEFAULT_MAX_PAGE_HITS,
+             numPageHits: Integer = FarooSearcher.DEFAULT_MAX_PAGE_HITS,
              startPoint: Integer = FarooSearcher.DEFAULT_START_POINT): FarooSearch = {
 
     // Sanity checks
-    var length = Math.min(numHits, FarooSearcher.DEFAULT_MAX_PAGE_HITS)
+    var length = Math.min(numPageHits, FarooSearcher.DEFAULT_MAX_PAGE_HITS)
     length = Math.max(length, 1)
 
     // Wait until we can make another query
@@ -93,35 +93,57 @@ class FarooSearcher(
     FarooSearcher.lastQueryTime = Option(new Date())
 
     // Convert the json response string to faroo search results.
-    val searchResponse = new Gson().fromJson[FarooSearch](jsonResponse.toString(), classOf[FarooSearch])
-    searchResponse
+    new Gson().fromJson[FarooSearch](jsonResponse.toString(), classOf[FarooSearch])
   }
 
-  /** Extract snippets from Faroo search results.
+  /** Perform a Faroo search and return all top results.
     *
     * @param query The query.
-    * @param numHits Maximum number of search hits to return. This value is
+    * @param numHits Maximum number of top search hits to return. This value is
     *                capped by Faroo (currently limited at 100).
     *
-    * @return Array of formatted text snippets extracted from Faroo search results.
+    * @return Array of top Faroo search results.
     */
-  def snippets(query: String, numHits: Integer = FarooSearcher.DEFAULT_MAX_HITS): Array[String] = {
+  def searchAllPages(query: String, numHits: Integer = FarooSearcher.DEFAULT_MAX_HITS): Array[FarooResult] = {
     val results = new ListBuffer[FarooResult]()
-
-    // Since we can only retrieve a handful of results for each query,
-    // we need to iteratively search and accumulate results until we
-    // reach the desired number of hits, or run out of results.
-    var startPoint = 1
-    var nextBatch = search(query, numHits = FarooSearcher.DEFAULT_MAX_PAGE_HITS, startPoint = startPoint)
+    var startPoint = FarooSearcher.DEFAULT_START_POINT
+    var nextBatch = search(query, numPageHits = FarooSearcher.DEFAULT_MAX_PAGE_HITS, startPoint = startPoint)
     while (results.length < numHits && nextBatch.results.length > 0) {
       results.appendAll(nextBatch.results)
       startPoint = startPoint + FarooSearcher.DEFAULT_MAX_PAGE_HITS
-      nextBatch = search(query, numHits = FarooSearcher.DEFAULT_MAX_PAGE_HITS, startPoint = startPoint)
+      nextBatch = search(query, numPageHits = FarooSearcher.DEFAULT_MAX_PAGE_HITS, startPoint = startPoint)
     }
-
-    // Return the text snippets
-    results.slice(0, numHits).map(r => r.kwic).toArray
+    results.slice(0, numHits).toArray
   }
+
+  /** Extract snippets from top Faroo search results.
+    *
+    * @param query The query.
+    * @param numHits Maximum number of top search hits to return. This value is
+    *                capped by Faroo (currently limited at 100).
+    *
+    * @return Array of formatted text snippets extracted from top Faroo search results.
+    */
+  def snippets(query: String, numHits: Integer = FarooSearcher.DEFAULT_MAX_HITS): Array[String] = {
+    // Return the text snippets
+    searchAllPages(query, numHits = numHits).map(r => r.kwic)
+  }
+
+  /** Return the overall total number of hits estimated from the search.
+    *
+    * 10.2013: This feature is currently unimplemented by Faroo but is planned for
+    * future implementation. See http://www.faroo.com/hp/p2p/faq.html#top100
+    *
+    * We could consider just returning the top number of hits from the search.
+    * {{{
+    * search(term).count.toLong
+    * }}}
+    *
+    * @param query The query.
+    *
+    * @return Estimated total number of hits.
+    */
+  def totalResults(query: String): Long = ???
 
 
   /******** Searcher implementation starts here ********/
@@ -135,7 +157,7 @@ class FarooSearcher(
     *
     * @return Total occurrence count of the term.
     */
-  def termFreq(term: String): Long = search(term).count.toLong
+  def termFreq(term: String): Long = totalResults(term)
 
   /** Return the document frequency for the term.
     *
@@ -143,7 +165,7 @@ class FarooSearcher(
     *
     * @return Number of documents containing the term.
     */
-  def docFreq(term: String): Long = search(term).count.toLong
+  def docFreq(term: String): Long = totalResults(term)
 
   /** Search and return highlighted snippets from the results.
     *
@@ -218,9 +240,6 @@ object RunFarooSearcher {
     val searcher = new FarooSearcher()
     val snippets = searcher.snippets(queryStr)
     snippets.foreach(s => println(s))
-
-    // Print summary statistics
-    println("\nTerm frequency: " + searcher.termFreq(queryStr))
   }
 
 }

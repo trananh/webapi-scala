@@ -14,16 +14,15 @@
 
 package search.web
 
+import collection.JavaConversions._
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.customsearch.Customsearch
 import com.google.api.services.customsearch.CustomsearchRequestInitializer
-import com.google.api.services.customsearch.model.Result
+import com.google.api.services.customsearch.model.{Search, Result}
 import search.Searcher
-import java.util
-import java.util.Date
 import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.ListBuffer
 import utils.Constants
 
 /** A web searcher that uses the Google Custom Searcher API to search web contents.
@@ -45,112 +44,86 @@ class GoogleSearcher(
     var params: mutable.HashMap[String,Any] = new mutable.HashMap[String,Any]())
   extends Searcher {
 
+  // Build custom search engine
+  val builder = new Customsearch.Builder(GoogleNetHttpTransport.newTrustedTransport(), new GsonFactory(), null)
+  builder.setCustomsearchRequestInitializer(new CustomsearchRequestInitializer(apiKey))
+  builder.setApplicationName(GoogleSearcher.APPLICATION_NAME)
+
+
   /** Perform a Google search.
     *
     * @param query The query.
-    * @param numHits Maximum number of search hits to return. This value is
-    *                capped by Google's allowance (currently limited at 100).
-    * @param numPageHits Maximum number of search hits per search. This value is
+    * @param numPageHits Maximum number of search hits per search (page). This value is
     *                    capped by Google's allowance (currently limited at 10).
+    * @param startPoint The index of the first result to return.
     *
-    * @return List of Google search results.
+    * @return Google search response.
     */
-  def google(query: String,
-             numHits: Integer = GoogleSearcher.DEFAULT_MAX_HITS,
-             numPageHits: Integer = GoogleSearcher.DEFAULT_MAX_PAGE_HITS)
-    : java.util.List[Result] = {
+  def search(query: String,
+             numPageHits: Integer = GoogleSearcher.DEFAULT_MAX_PAGE_HITS,
+             startPoint: Long = GoogleSearcher.DEFAULT_START_POINT): Search = {
 
     // Sanity check
-    val max = Math.min(numHits, GoogleSearcher.DEFAULT_MAX_HITS)
     val num = Math.min(numPageHits, GoogleSearcher.DEFAULT_MAX_PAGE_HITS)
-
-    // Build custom search engine
-    val builder = new Customsearch.Builder(GoogleNetHttpTransport.newTrustedTransport(), new GsonFactory(), null)
-    builder.setCustomsearchRequestInitializer(new CustomsearchRequestInitializer(apiKey))
-    builder.setApplicationName(GoogleSearcher.APPLICATION_NAME)
 
     // Build request
     val request = builder.build().cse().list(query)
     request.setCx(engineUID)
     request.setNum(num)
+    request.setStart(startPoint)
 
     // Get results
-    val results: java.util.List[Result] = new util.ArrayList[Result]()
-
-    // Execute search
-    var search = request.execute()
-    results.addAll(search.getItems)
-    while (search.getQueries.containsKey("nextPage") &&
-      search.getQueries.get("nextPage").get(0).getStartIndex <= max - num + 1) {
-      request.setStart(search.getQueries.get("nextPage").get(0).getStartIndex.toLong)
-      search = request.execute()
-      results.addAll(search.getItems)
-    }
-
-    results
+    request.execute()
   }
 
-  /** Return the total number of hits from the search.
+  /** Perform a Google search and return all top results.
+    *
+    * @param query The query.
+    * @param numHits Maximum number of top search hits to return. This value is
+    *                capped by Google's allowance (currently limited at 100).
+    *
+    * @return Array of top Google search results.
+    */
+  def searchAllPages(query: String, numHits: Integer = GoogleSearcher.DEFAULT_MAX_HITS): Array[Result] = {
+    val results = new ListBuffer[Result]()
+    var startPoint = GoogleSearcher.DEFAULT_START_POINT
+    var nextBatch = search(query, numPageHits = GoogleSearcher.DEFAULT_MAX_PAGE_HITS, startPoint = startPoint)
+    while (results.length < numHits && nextBatch.getItems.size() > 0) {
+      results.appendAll(nextBatch.getItems)
+      startPoint = startPoint + GoogleSearcher.DEFAULT_MAX_PAGE_HITS
+      nextBatch = search(query, numPageHits = GoogleSearcher.DEFAULT_MAX_PAGE_HITS, startPoint = startPoint)
+    }
+    results.slice(0, numHits).toArray
+  }
+
+  /** Extract snippets from top Google search results.
+    *
+    * @param query The query.
+    * @param numHits Maximum number of top search hits to return. This value is
+    *                capped by Google's allowance (currently limited at 100).
+    *
+    * @return Array of formatted text snippets extracted from top Google search results.
+    */
+  def snippets(query: String, numHits: Integer = GoogleSearcher.DEFAULT_MAX_HITS): Array[String] = {
+    // Return the text snippets
+    searchAllPages(query, numHits = numHits).map(r => r.getSnippet)
+  }
+
+  /** Return the overall total number of hits estimated from the search.
     *
     * @param query The query.
     *
-    * @return Total number of hits.
+    * @return Estimated total number of hits.
     */
   def totalResults(query: String): Long = {
-    // Build custom search engine
-    val builder = new Customsearch.Builder(GoogleNetHttpTransport.newTrustedTransport(), new GsonFactory(), null)
-    builder.setCustomsearchRequestInitializer(new CustomsearchRequestInitializer(apiKey))
-    builder.setApplicationName(GoogleSearcher.APPLICATION_NAME)
-
-    // Build request
-    val request = builder.build().cse().list(query)
-    request.setCx(engineUID)
-    request.setNum(1)
-
     // Execute search
-    val search = request.execute()
+    val search: Search = this.search(query)
     search.getQueries.get("request").get(0).getTotalResults
   }
 
-  /** Extract snippets Google search results.
-    *
-    * @param query The query.
-    * @param numHits Maximum number of search hits to return. This value is
-    *                capped by Google's allowance (currently limited at 100).
-    * @param numPageHits Maximum number of search hits per search. This value is
-    *                    capped by Google's allowance (currently limited at 10).
-    *
-    * @return Array of formatted text snippets extracted from Google search results.
-    */
-  def snippets(query: String,
-               numHits: Integer = GoogleSearcher.DEFAULT_MAX_HITS,
-               numPageHits: Integer = GoogleSearcher.DEFAULT_MAX_PAGE_HITS): Array[String] = {
 
-    val start = new Date()
-    if (Constants.DEBUG) println("Google search snippets started for: " + query)
-
-    // Google search for results
-    val results: java.util.List[Result] = google(query, numHits, numPageHits)
-
-    // Extract snippets from search results
-    val snippets = new ArrayBuffer[String]()
-    val it = results.iterator()
-    while (it.hasNext) {
-      val r = it.next
-      snippets += r.getSnippet
-    }
-
-    if (Constants.DEBUG) {
-      println("Retrieved " + snippets.length + " hits")
-      println("Search completed. Total time: " + (new Date().getTime - start.getTime) + " milliseconds")
-    }
-
-    snippets.toArray
-  }
-  
-  
   /******** Searcher implementation starts here ********/
-  
+
   def close() { /* nothing to close for now */ }
 
   /** Return the term frequency (i.e., the total number of time the term is found).
@@ -176,10 +149,7 @@ class GoogleSearcher(
     *
     * @return Array of highlighted text snippets from the results.
     */
-  def searchHighlight(queryStr: String, numHits: Integer): Array[String] = {
-    snippets(queryStr, numHits,
-      params.getOrElse("numPageHits", GoogleSearcher.DEFAULT_MAX_PAGE_HITS).asInstanceOf[Integer])
-  }
+  def searchHighlight(queryStr: String, numHits: Integer): Array[String] = snippets(queryStr, numHits)
 
 }
 
@@ -194,6 +164,7 @@ object GoogleSearcher {
     */
   val DEFAULT_MAX_HITS = 100
   val DEFAULT_MAX_PAGE_HITS = 10
+  val DEFAULT_START_POINT = 0
   val APPLICATION_NAME = "demo-application/1.0"
 }
 
@@ -207,13 +178,11 @@ object RunGoogleSearcher {
 
     // Search web
     val searcher = new GoogleSearcher()
-    val results = searcher.snippets(queryStr)
-    for (r <- results) {
-      println(r)
-    }
+    val snippets = searcher.snippets(queryStr)
+    snippets.foreach(s => println(s))
 
     // Print summary statistics
     println("\nDoc frequency: " + searcher.docFreq(queryStr))
   }
-  
+
 }
