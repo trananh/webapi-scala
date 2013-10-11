@@ -23,6 +23,7 @@ import com.google.api.services.customsearch.model.{Search, Result}
 import search.Searcher
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
+import scala.util.control.Breaks._
 import utils.Constants
 
 /** A web searcher that uses the Google Custom Searcher API to search web contents.
@@ -88,10 +89,14 @@ class GoogleSearcher(
     val results = new ListBuffer[Result]()
     var startPoint = GoogleSearcher.DEFAULT_START_POINT
     var nextBatch = search(query, numPageHits = GoogleSearcher.DEFAULT_MAX_PAGE_HITS, startPoint = startPoint)
-    while (results.length < numHits && nextBatch.getItems.size() > 0) {
-      results.appendAll(nextBatch.getItems)
-      startPoint = startPoint + GoogleSearcher.DEFAULT_MAX_PAGE_HITS
-      nextBatch = search(query, numPageHits = GoogleSearcher.DEFAULT_MAX_PAGE_HITS, startPoint = startPoint)
+    breakable {
+      while (results.length < numHits && nextBatch.getItems.size() > 0) {
+        results.appendAll(nextBatch.getItems)
+        startPoint = startPoint + GoogleSearcher.DEFAULT_MAX_PAGE_HITS
+        if (startPoint > GoogleSearcher.DEFAULT_MAX_HITS)
+          break
+        nextBatch = search(query, numPageHits = GoogleSearcher.DEFAULT_MAX_PAGE_HITS, startPoint = startPoint)
+      }
     }
     results.slice(0, numHits).toArray
   }
@@ -164,7 +169,7 @@ object GoogleSearcher {
     */
   val DEFAULT_MAX_HITS = 100
   val DEFAULT_MAX_PAGE_HITS = 10
-  val DEFAULT_START_POINT = 0
+  val DEFAULT_START_POINT = 1
   val APPLICATION_NAME = "demo-application/1.0"
 }
 
