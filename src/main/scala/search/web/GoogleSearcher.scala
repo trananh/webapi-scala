@@ -92,7 +92,7 @@ class GoogleSearcher(
     breakable {
       while (results.length < numHits && nextBatch.getItems.size() > 0) {
         results.appendAll(nextBatch.getItems)
-        startPoint = startPoint + GoogleSearcher.DEFAULT_MAX_PAGE_HITS
+        startPoint = startPoint + nextBatch.getItems.size()
         if (startPoint > GoogleSearcher.DEFAULT_MAX_HITS)
           break
         nextBatch = search(query, numPageHits = GoogleSearcher.DEFAULT_MAX_PAGE_HITS, startPoint = startPoint)
@@ -110,7 +110,6 @@ class GoogleSearcher(
     * @return Array of formatted text snippets extracted from top Google search results.
     */
   def snippets(query: String, numHits: Integer = GoogleSearcher.DEFAULT_MAX_HITS): Array[String] = {
-    // Return the text snippets
     searchAllPages(query, numHits = numHits).map(r => r.getSnippet)
   }
 
@@ -121,9 +120,7 @@ class GoogleSearcher(
     * @return Estimated total number of hits.
     */
   def totalResults(query: String): Long = {
-    // Execute search
-    val search: Search = this.search(query)
-    search.getQueries.get("request").get(0).getTotalResults
+    this.search(query, numPageHits = 1).getQueries.get("request").get(0).getTotalResults
   }
 
 
@@ -187,6 +184,7 @@ object RunGoogleSearcher {
     snippets.foreach(s => println(s))
 
     // Print summary statistics
+    println("\nTop results: " + snippets.size)
     println("\nDoc frequency: " + searcher.docFreq(queryStr))
   }
 

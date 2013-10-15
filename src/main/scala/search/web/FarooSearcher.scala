@@ -110,7 +110,7 @@ class FarooSearcher(
     var nextBatch = search(query, numPageHits = FarooSearcher.DEFAULT_MAX_PAGE_HITS, startPoint = startPoint)
     while (results.length < numHits && nextBatch.results.length > 0) {
       results.appendAll(nextBatch.results)
-      startPoint = startPoint + FarooSearcher.DEFAULT_MAX_PAGE_HITS
+      startPoint = startPoint + nextBatch.results.size
       nextBatch = search(query, numPageHits = FarooSearcher.DEFAULT_MAX_PAGE_HITS, startPoint = startPoint)
     }
     results.slice(0, numHits).toArray
@@ -125,7 +125,6 @@ class FarooSearcher(
     * @return Array of formatted text snippets extracted from top Faroo search results.
     */
   def snippets(query: String, numHits: Integer = FarooSearcher.DEFAULT_MAX_HITS): Array[String] = {
-    // Return the text snippets
     searchAllPages(query, numHits = numHits).map(r => r.kwic)
   }
 
@@ -240,6 +239,9 @@ object RunFarooSearcher {
     val searcher = new FarooSearcher()
     val snippets = searcher.snippets(queryStr)
     snippets.foreach(s => println(s))
+
+    // Print summary statistics
+    println("\nTop results: " + snippets.size)
   }
 
 }

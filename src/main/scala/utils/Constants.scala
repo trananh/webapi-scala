@@ -77,4 +77,12 @@ object Constants {
     if (config.containsKey("faroo.apiKey")) apiKey = config.getProperty("faroo.apiKey")
   }
 
+
+  /** Bing search properties */
+  object BingProperties {
+    var accountKey = "UNKNOWN"
+
+    if (config.containsKey("bing.accountKey")) accountKey = config.getProperty("bing.accountKey")
+  }
+
 }
