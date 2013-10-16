@@ -122,7 +122,7 @@ class BingSearcher(
       results.appendAll(nextBatch.Web)
       startPoint += nextBatch.Web.size
       nextBatch = search(query, numPageHits = BingSearcher.DEFAULT_WEB_MAX_PAGE_HITS, startPoint = startPoint)
-      totalHits = nextBatch.WebTotal.toInt
+      totalHits = if (nextBatch.WebTotal.isEmpty) 0 else nextBatch.WebTotal.toInt
     }
     results.slice(0, numHits).toArray
   }
